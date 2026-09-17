@@ -1,0 +1,86 @@
+name: ARBM ONE Black Belt Public Verifier
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - snapshot.enc
+      - manifest.json
+      - verify-snapshot.mjs
+      - .github/workflows/verify.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: arbm-one-blackbelt-public-verifier
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout verifier
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Decrypt exact-SHA snapshot
+        env:
+          SNAPSHOT_KEY: ${{ secrets.SNAPSHOT_KEY }}
+        run: node verify-snapshot.mjs
+
+      - name: Verify embedded Git source SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          embedded="$(git get-tar-commit-id < snapshot.tar)"
+          expected="$(node -p "require('./manifest.json').source_sha")"
+          test "$embedded" = "$expected"
+          echo "EMBEDDED_SOURCE_SHA=$embedded"
+
+      - name: Extract exact source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir source
+          tar -xf snapshot.tar -C source
+
+      - name: Run independent provider gate
+        working-directory: source
+        env:
+          ARBM_CI_PROVIDER: github-public-verifier
+          ARBM_CI_SCOPE: provider
+        run: npm run ci:portable:core
+
+      - name: Emit proof manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require("fs");
+          const m=require("./manifest.json");
+          fs.writeFileSync("proof.json", JSON.stringify({
+            status:"PASS",
+            provider:"github-public-verifier",
+            source_repo:m.source_repo,
+            source_sha:m.source_sha,
+            archive_sha256:m.archive_sha256,
+            gate_contract_version:m.gate_contract_version,
+            run_id:process.env.GITHUB_RUN_ID,
+            workflow_ref:process.env.GITHUB_WORKFLOW_REF
+          }, null, 2)+"\n");
+          NODE
+
+      - name: Upload proof artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: arbm-one-blackbelt-proof-${{ github.run_id }}
+          path: proof.json
+          retention-days: 30
