@@ -80,6 +80,27 @@ jobs:
           git config user.email "arbm-blackbelt@users.noreply.github.com"
           git add -A
           git commit -q -m "verified snapshot packaging workspace"
+      - name: Build exact-SHA Cloudflare release bundle
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          export WORKERS_CI_COMMIT_SHA="$(node -p "require('../manifest.json').source_sha")"
+          export WORKERS_CI_BRANCH="main"
+          npm run check:cloudflare | tee cloudflare-check.log
+          entry="$(find cf-release-bundle -maxdepth 1 -type f -name '*.js' -print -quit)"
+          test -n "$entry"
+          tar -czf ../cloudflare-release.tgz cf-release-bundle dist/client src/lib/build-meta.ts wrangler.jsonc package.json package-lock.json
+          printf 'source_sha=%s\nentry=%s\n' "$WORKERS_CI_COMMIT_SHA" "$entry" > ../cloudflare-release.env
+
+      - name: Upload exact-SHA Cloudflare release bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: arbm-one-cloudflare-release-${{ github.run_id }}
+          path: |
+            cloudflare-release.tgz
+            cloudflare-release.env
+          retention-days: 7
       - name: Run commercial fresh-install proof
         working-directory: source
         shell: bash
