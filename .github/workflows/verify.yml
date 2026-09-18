@@ -195,14 +195,17 @@ jobs:
           DST_PASSWORD="$(openssl rand -hex 40)"
           echo "::add-mask::$DST_PASSWORD"
           DST_AUD=''
-          for aud in 'arbm-platform-ci' 'arbm-one-dr-neon'; do
-            probe_oidc="$(mint_oidc "$aud")"
-            probe_http="$(curl -sS -o dst-probe.json -w '%{http_code}' -X POST "$DST_API/rpc/verifier_probe"             -H "Authorization: Bearer $probe_oidc"             -H 'Content-Type: application/json'             -d '{}')"
-            if [ "$probe_http" = "200" ]; then
-              DST_AUD="$aud"
-              dst_oidc="$probe_oidc"
-              break
-            fi
+          for attempt in $(seq 1 8); do
+            for aud in 'arbm-platform-ci' 'arbm-one-dr-neon'; do
+              probe_oidc="$(mint_oidc "$aud")"
+              probe_http="$(curl -sS -o dst-probe.json -w '%{http_code}' -X POST "$DST_API/rpc/verifier_probe"             -H "Authorization: Bearer $probe_oidc"             -H 'Content-Type: application/json'             -d '{}')"
+              if [ "$probe_http" = "200" ]; then
+                DST_AUD="$aud"
+                dst_oidc="$probe_oidc"
+                break 2
+              fi
+            done
+            sleep 2
           done
           test -n "$DST_AUD"
           echo "TARGET_OIDC_AUDIENCE=$DST_AUD"
