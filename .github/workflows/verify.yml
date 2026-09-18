@@ -201,6 +201,10 @@ jobs:
             node -e 'const fs=require("fs");let j={};try{j=JSON.parse(fs.readFileSync("dst-lease-response.json","utf8"))}catch{}; console.error("TARGET_LEASE_ERROR="+String(j.message||j.code||"UNKNOWN").slice(0,160)); process.exit(1)'
           fi
           dst_resp="$(cat dst-lease-response.json)"
+          dst_ok="$(printf '%s' "$dst_resp" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(String(JSON.parse(s).ok===true)))')"
+          if [ "$dst_ok" != "true" ]; then
+            printf '%s' "$dst_resp" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s); console.error("TARGET_LEASE_STAGE="+String(j.stage||"UNKNOWN")); console.error("TARGET_LEASE_SQLSTATE="+String(j.sqlstate||"UNKNOWN")); console.error("TARGET_LEASE_ERROR="+String(j.error||"UNKNOWN").slice(0,120)); process.exit(1)})'
+          fi
           DST_ROLE="$(printf '%s' "$dst_resp" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).role||""))')"
           DST_HOST="$(printf '%s' "$dst_resp" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).host||""))')"
           DST_PORT="$(printf '%s' "$dst_resp" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(String(JSON.parse(s).port||5432)))')"
