@@ -180,7 +180,12 @@ jobs:
           trap cleanup EXIT
 
           src_oidc="$(mint_oidc 'arbm-platform-ci')"
-          src_resp="$(curl -fsS -X POST "$SRC_API/ci-backup-db-lease" -H "Authorization: Bearer $src_oidc")"
+          src_http="$(curl -sS -o src-lease-response.json -w '%{http_code}' -X POST "$SRC_API/ci-backup-db-lease" -H "Authorization: Bearer $src_oidc")"
+          echo "SOURCE_LEASE_HTTP=$src_http"
+          if [ "$src_http" != "200" ]; then
+            node -e 'const fs=require("fs");let j={};try{j=JSON.parse(fs.readFileSync("src-lease-response.json","utf8"))}catch{}; console.error("SOURCE_LEASE_ERROR="+String(j.error||j.code||"UNKNOWN").slice(0,120)); process.exit(1)'
+          fi
+          src_resp="$(cat src-lease-response.json)"
           SRC_LEASE="$(printf '%s' "$src_resp" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).lease_id||""))')"
           SRC_DB_URL="$(printf '%s' "$src_resp" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).db_url||""))')"
           test -n "$SRC_LEASE" && test -n "$SRC_DB_URL"
@@ -190,7 +195,12 @@ jobs:
           echo "::add-mask::$DST_PASSWORD"
           dst_oidc="$(mint_oidc 'arbm-one-dr-neon')"
           dst_body="$(node -e 'process.stdout.write(JSON.stringify({p_password:process.argv[1]}))' "$DST_PASSWORD")"
-          dst_resp="$(curl -fsS -X POST "$DST_API/rpc/issue_restore_lease"             -H "Authorization: Bearer $dst_oidc"             -H 'Content-Type: application/json'             -d "$dst_body")"
+          dst_http="$(curl -sS -o dst-lease-response.json -w '%{http_code}' -X POST "$DST_API/rpc/issue_restore_lease"             -H "Authorization: Bearer $dst_oidc"             -H 'Content-Type: application/json'             -d "$dst_body")"
+          echo "TARGET_LEASE_HTTP=$dst_http"
+          if [ "$dst_http" != "200" ]; then
+            node -e 'const fs=require("fs");let j={};try{j=JSON.parse(fs.readFileSync("dst-lease-response.json","utf8"))}catch{}; console.error("TARGET_LEASE_ERROR="+String(j.message||j.code||"UNKNOWN").slice(0,160)); process.exit(1)'
+          fi
+          dst_resp="$(cat dst-lease-response.json)"
           DST_ROLE="$(printf '%s' "$dst_resp" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).role||""))')"
           DST_HOST="$(printf '%s' "$dst_resp" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).host||""))')"
           DST_PORT="$(printf '%s' "$dst_resp" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(String(JSON.parse(s).port||5432)))')"
