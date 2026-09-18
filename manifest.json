@@ -1,7 +1,7 @@
 {
   "source_repo": "arbmsistone-lab/ARBM-one",
-  "source_sha": "cff3b1b6bfd18984fd827801ad2b2d4944950290",
-  "archive_sha256": "5ac6612d17317483950d2321e5b06c2948be09b32cf1578e65e9750f711cd27c",
+  "source_sha": "f71016ea7c05a7a656eaf72b53063254c955ffc6",
+  "archive_sha256": "f39a3ab2ceffe8cf2d2c891b823e6f88faa8c046e4d7a11ad403b81d1434f9d8",
   "gate_contract_version": "ARBM_ONE_CLOUD_CRITICAL_V1",
   "ci_scope": "provider",
   "created_for": "blackbelt-proof"

@@ -1,4 +1,4 @@
-﻿name: ARBM ONE Black Belt Public Verifier
+name: ARBM ONE Black Belt Public Verifier
 
 on:
   workflow_dispatch:
@@ -62,7 +62,9 @@ jobs:
       - name: Run commercial fresh-install proof
         working-directory: source
         shell: bash
-        run: bash scripts/run-commercial-fresh-install.sh | tee commercial-fresh-install-evidence.log
+        run: |
+          export ARBM_VERIFIED_SOURCE_SHA="$(node -p "require('../manifest.json').source_sha")"
+          bash scripts/run-commercial-fresh-install.sh | tee commercial-fresh-install-evidence.log
 
       - name: Attest GitHub public verifier with OIDC
         shell: bash
