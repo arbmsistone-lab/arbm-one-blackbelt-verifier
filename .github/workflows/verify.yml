@@ -274,16 +274,20 @@ jobs:
           echo "TARGET_COUNTS=$dst_counts"
           test "$src_counts" = "$dst_counts"
 
-          promote_body="$(node -e 'process.stdout.write(JSON.stringify({p_role:process.argv[1]}))' "$DST_ROLE")"
-          promote_http="$(curl -sS -o dst-promote-response.json -w '%{http_code}' -X POST "$DST_API/rpc/promote_restore_lease"             -H "Authorization: Bearer $dst_oidc"             -H 'Content-Type: application/json'             -d "$promote_body")"
+          PROMOTED_ROLE="$DST_ROLE"
+          promote_oidc="$(mint_oidc "$DST_AUD")"
+          promote_body="$(node -e 'process.stdout.write(JSON.stringify({p_role:process.argv[1]}))' "$PROMOTED_ROLE")"
+          promote_http="$(curl -sS -o dst-promote-response.json -w '%{http_code}' -X POST "$DST_API/rpc/promote_restore_lease"             -H "Authorization: Bearer $promote_oidc"             -H 'Content-Type: application/json'             -d "$promote_body")"
           echo "TARGET_PROMOTE_HTTP=$promote_http"
-          test "$promote_http" = "200"
+          if [ "$promote_http" != "200" ]; then
+            node -e 'const fs=require("fs");let j={};try{j=JSON.parse(fs.readFileSync("dst-promote-response.json","utf8"))}catch{};console.error("TARGET_PROMOTE_CODE="+String(j.code||"UNKNOWN").slice(0,80));console.error("TARGET_PROMOTE_ERROR="+String(j.message||j.error||j.details||"UNKNOWN").slice(0,180));process.exit(1)'
+          fi
           promote_ok="$(node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync("dst-promote-response.json","utf8"));process.stdout.write(String(j.ok===true&&j.promoted===true))')"
           test "$promote_ok" = "true"
           DST_ROLE=''
 
           sha256sum arbm-one-dr.dump pre.sql post.sql > dr-restore.sha256
-          printf '%s\n'             "status=PASS"             "run_id=$GITHUB_RUN_ID"             "source_counts=$src_counts"             "target_counts=$dst_counts"             "source_lease=$SRC_LEASE"             "target_role=$DST_ROLE"             > dr-restore.env
+          printf '%s\n'             "status=PASS"             "run_id=$GITHUB_RUN_ID"             "source_counts=$src_counts"             "target_counts=$dst_counts"             "source_lease=$SRC_LEASE"             "target_role=$PROMOTED_ROLE"             > dr-restore.env
 
       - name: Upload DR restore proof
         if: always()
