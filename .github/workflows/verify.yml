@@ -241,6 +241,8 @@ jobs:
 
           pg_dump "$SRC_DB_URL"             --format=custom             --no-owner             --no-privileges             "${DUMP_ARGS[@]}"             --file=arbm-one-dr.dump
 
+          src_counts="$(psql "$SRC_DB_URL" -X -At -v ON_ERROR_STOP=1 -c "select (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p'))||'|'||(select count(*) from pg_policies where schemaname='public')||'|'||(select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public')||'|'||(select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prosecdef)")"
+
           pg_restore --list arbm-one-dr.dump > restore.list
           grep -vE 'auth_password_vetting_auth_user_id_fkey|commercial_bootstrap_state_v1_consumed_by_fkey|core_modulos_eventos_v1_criado_por_fkey|core_modulos_v1_atualizado_por_fkey|usuarios_auth_user_id_fkey' restore.list > restore.filtered.list
 
@@ -266,7 +268,6 @@ jobs:
           pg_restore --section=data --use-list=restore.filtered.list --no-owner --no-privileges --dbname="$DST_DB_URL" arbm-one-dr.dump
           psql "$DST_DB_URL" -X -v ON_ERROR_STOP=1 -f post.sql
 
-          src_counts="$(psql "$SRC_DB_URL" -X -At -v ON_ERROR_STOP=1 -c "select (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p'))||'|'||(select count(*) from pg_policies where schemaname='public')||'|'||(select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public')||'|'||(select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prosecdef)")"
           dst_counts="$(psql "$DST_DB_URL" -X -At -v ON_ERROR_STOP=1 -c "select (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p'))||'|'||(select count(*) from pg_policies where schemaname='public')||'|'||(select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public')||'|'||(select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prosecdef)")"
 
           echo "SOURCE_COUNTS=$src_counts"
