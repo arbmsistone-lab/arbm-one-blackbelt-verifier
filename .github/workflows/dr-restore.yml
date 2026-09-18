@@ -13,12 +13,8 @@ on:
           - dr-audience-probe
   push:
     branches: [main]
-    paths:
-      - .github/workflows/dr-restore.yml
   pull_request:
     branches: [main]
-    paths:
-      - .github/workflows/dr-restore.yml
 
 permissions:
   contents: read
