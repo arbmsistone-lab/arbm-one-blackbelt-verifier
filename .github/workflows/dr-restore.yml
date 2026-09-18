@@ -21,7 +21,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: arbm-one-dr-restore-verifier
+  group: arbm-one-dr-restore-verifier-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -44,6 +44,8 @@ jobs:
           grep -F 'retention-days: 90' "$f"
           grep -F 'if-no-files-found: error' "$f"
           grep -F 'cancel-in-progress: false' "$f"
+          grep -F 'github.event_name' "$f"
+          grep -F 'github.ref' "$f"
           ! grep -F 'continue-on-error: true' "$f"
           echo "DR_CONTRACT=PASS"
 
