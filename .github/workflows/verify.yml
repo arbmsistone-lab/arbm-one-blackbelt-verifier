@@ -252,7 +252,17 @@ jobs:
           done
           sed -i -E '/^[[:space:]]*CREATE[[:space:]]+SCHEMA[[:space:]]+public;[[:space:]]*$/d; /^[[:space:]]*COMMENT[[:space:]]+ON[[:space:]]+SCHEMA[[:space:]]+public[[:space:]]+IS[[:space:]]+/d' pre.sql
 
-          psql "$DST_DB_URL" -X -v ON_ERROR_STOP=1 -f pre.sql
+          if ! psql "$DST_DB_URL" -X -v ON_ERROR_STOP=1 -f pre.sql 2>pre.err; then
+            cat pre.err
+            line="$(sed -n 's/.*pre.sql:\([0-9][0-9]*\):.*//p' pre.err | head -n1)"
+            if [ -n "$line" ]; then
+              start=$((line>12 ? line-12 : 1))
+              end=$((line+12))
+              nl -ba pre.sql | sed -n "${start},${end}p"
+            fi
+            exit 1
+          fi
+
           pg_restore --section=data --use-list=restore.filtered.list --no-owner --no-privileges --dbname="$DST_DB_URL" arbm-one-dr.dump
           psql "$DST_DB_URL" -X -v ON_ERROR_STOP=1 -f post.sql
 
