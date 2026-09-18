@@ -248,7 +248,7 @@ jobs:
           for f in pre.sql post.sql; do
             perl -0pi -e 's/auth\\.uid\\(\\)/public.arbm_auth_uid()/g; s/auth\\.jwt\\(\\)/public.arbm_auth_jwt()/g; s/auth\\.role\\(\\)/public.arbm_auth_role()/g; s/auth\\.users/public.arbm_auth_users_compat/g' "$f"
           done
-          sed -i -E '/^[[:space:]]*CREATE[[:space:]]+SCHEMA[[:space:]]+public;[[:space:]]*$/d' pre.sql
+          sed -i -E '/^[[:space:]]*CREATE[[:space:]]+SCHEMA[[:space:]]+public;[[:space:]]*$/d; /^[[:space:]]*COMMENT[[:space:]]+ON[[:space:]]+SCHEMA[[:space:]]+public[[:space:]]+IS[[:space:]]+/d' pre.sql
 
           psql "$DST_DB_URL" -X -v ON_ERROR_STOP=1 -f pre.sql
           pg_restore --section=data --use-list=restore.filtered.list --no-owner --no-privileges --dbname="$DST_DB_URL" arbm-one-dr.dump
