@@ -254,7 +254,7 @@ jobs:
 
           if ! psql "$DST_DB_URL" -X -v ON_ERROR_STOP=1 -f pre.sql 2>pre.err; then
             cat pre.err
-            line="$(sed -n 's/.*pre.sql:\([0-9][0-9]*\):.*//p' pre.err | head -n1)"
+            line="$(sed -n 's/.*pre.sql:\([0-9][0-9]*\):.*/\1/p' pre.err | head -n1)"
             if [ -n "$line" ]; then
               start=$((line>12 ? line-12 : 1))
               end=$((line+12))
