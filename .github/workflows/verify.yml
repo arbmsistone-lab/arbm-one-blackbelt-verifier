@@ -1,4 +1,4 @@
-name: ARBM ONE Black Belt Public Verifier
+﻿name: ARBM ONE Black Belt Public Verifier
 
 on:
   workflow_dispatch:
@@ -24,10 +24,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout verifier
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Node 24
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
 
@@ -58,6 +58,11 @@ jobs:
           ARBM_CI_PROVIDER: github-public-verifier
           ARBM_CI_SCOPE: provider
         run: npm run ci:portable:core
+
+      - name: Run commercial fresh-install proof
+        working-directory: source
+        shell: bash
+        run: bash scripts/run-commercial-fresh-install.sh | tee commercial-fresh-install-evidence.log
 
       - name: Attest GitHub public verifier with OIDC
         shell: bash
@@ -99,8 +104,9 @@ jobs:
           NODE
 
       - name: Upload proof artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: arbm-one-blackbelt-proof-${{ github.run_id }}
           path: proof.json
           retention-days: 30
+
