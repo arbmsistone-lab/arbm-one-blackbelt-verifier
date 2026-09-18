@@ -203,6 +203,14 @@ jobs:
           test -n "$SRC_LEASE" && test -n "$SRC_DB_URL"
           echo "::add-mask::$SRC_DB_URL"
 
+          reset_oidc="$(mint_oidc 'arbm-one-dr-neon')"
+          reset_http="$(curl -sS -o dst-reset-response.json -w '%{http_code}' -X POST "$DST_API/rpc/reset_restore_target"             -H "Authorization: Bearer $reset_oidc"             -H 'Content-Type: application/json'             -d '{}')"
+          echo "TARGET_RESET_HTTP=$reset_http"
+          test "$reset_http" = "200"
+          reset_ok="$(node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync("dst-reset-response.json","utf8"));process.stdout.write(String(j.ok===true&&j.reset===true&&Number(j.active_leases)===0))')"
+          echo "TARGET_RESET_DB=$reset_ok"
+          test "$reset_ok" = "true"
+
           DST_PASSWORD="$(openssl rand -hex 40)"
           echo "::add-mask::$DST_PASSWORD"
           DST_AUD=''
