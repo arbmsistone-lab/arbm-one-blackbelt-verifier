@@ -70,6 +70,16 @@ jobs:
           ARBM_CI_SCOPE: provider
         run: npm run ci:portable:core
 
+      - name: Prepare ephemeral Git metadata for packaging
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init -q
+          git config user.name "ARBM Blackbelt Verifier"
+          git config user.email "arbm-blackbelt@users.noreply.github.com"
+          git add -A
+          git commit -q -m "verified snapshot packaging workspace"
       - name: Run commercial fresh-install proof
         working-directory: source
         shell: bash
