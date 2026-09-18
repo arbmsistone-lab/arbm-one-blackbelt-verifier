@@ -70,16 +70,24 @@ jobs:
           ARBM_CI_SCOPE: provider
         run: npm run ci:portable:core
 
-      - name: Prepare ephemeral Git metadata for packaging
+      - name: Prepare canonical Git identity for packaging
         working-directory: source
         shell: bash
         run: |
           set -euo pipefail
+          source_sha="$(node -p "require('../manifest.json').source_sha")"
+          test "$source_sha" = "$ARBM_VERIFIED_SOURCE_SHA"
           git init -q
           git config user.name "ARBM Blackbelt Verifier"
           git config user.email "arbm-blackbelt@users.noreply.github.com"
           git add -A
           git commit -q -m "verified snapshot packaging workspace"
+          workspace_commit="$(git rev-parse HEAD)"
+          git update-ref "refs/replace/$source_sha" "$workspace_commit"
+          git update-ref HEAD "$source_sha"
+          test "$(git rev-parse HEAD)" = "$source_sha"
+          git archive --format=tar HEAD -o /tmp/blackbelt-canonical-probe.tar
+          test "$(git get-tar-commit-id < /tmp/blackbelt-canonical-probe.tar)" = "$source_sha"
       - name: Run commercial fresh-install proof
         working-directory: source
         shell: bash
