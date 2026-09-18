@@ -2,6 +2,15 @@ name: ARBM ONE Black Belt Public Verifier
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Execution mode"
+        required: true
+        default: "verify"
+        type: choice
+        options:
+          - verify
+          - dr-restore
   push:
     branches: [main]
     paths:
@@ -20,6 +29,7 @@ concurrency:
 
 jobs:
   verify:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.mode == 'verify' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -111,4 +121,130 @@ jobs:
           name: arbm-one-blackbelt-proof-${{ github.run_id }}
           path: proof.json
           retention-days: 30
+
+  dr-restore:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'dr-restore' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Install PostgreSQL 17 client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor --yes -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          pg_dump --version | grep -Eq ' 17\\.'
+          pg_restore --version | grep -Eq ' 17\\.'
+
+      - name: Restore application schemas into Neon DR
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC_API='https://pvkpkqwdnnpkgvllwqbc.supabase.co/functions/v1/arbm-platform-api-v1/v1'
+          DST_API='https://ep-twilight-resonance-acg7v2h2.apirest.sa-east-1.aws.neon.tech/arbm_one_dr/rest/v1'
+          SRC_LEASE=''
+          DST_ROLE=''
+          SRC_DB_URL=''
+          DST_DB_URL=''
+
+          mint_oidc() {
+            local audience="$1"
+            local enc
+            enc="$(node -p "encodeURIComponent(process.argv[1])" "$audience")"
+            curl -fsS               -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"               "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=$enc" |
+              node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);if(!j.value)process.exit(1);process.stdout.write(j.value)})'
+          }
+
+          cleanup() {
+            set +e
+            if [ -n "$SRC_LEASE" ]; then
+              tok="$(mint_oidc 'arbm-platform-ci' 2>/dev/null || true)"
+              if [ -n "$tok" ]; then
+                body="$(node -e 'process.stdout.write(JSON.stringify({lease_id:process.argv[1]}))' "$SRC_LEASE")"
+                curl -sS -X POST "$SRC_API/ci-backup-db-lease-revoke"                   -H "Authorization: Bearer $tok"                   -H 'Content-Type: application/json'                   -d "$body" >/dev/null || true
+              fi
+            fi
+            if [ -n "$DST_ROLE" ]; then
+              tok="$(mint_oidc 'arbm-one-dr-neon' 2>/dev/null || true)"
+              if [ -n "$tok" ]; then
+                body="$(node -e 'process.stdout.write(JSON.stringify({p_role:process.argv[1]}))' "$DST_ROLE")"
+                curl -sS -X POST "$DST_API/rpc/revoke_restore_lease"                   -H "Authorization: Bearer $tok"                   -H 'Content-Type: application/json'                   -d "$body" >/dev/null || true
+              fi
+            fi
+          }
+          trap cleanup EXIT
+
+          src_oidc="$(mint_oidc 'arbm-platform-ci')"
+          src_resp="$(curl -fsS -X POST "$SRC_API/ci-backup-db-lease" -H "Authorization: Bearer $src_oidc")"
+          SRC_LEASE="$(printf '%s' "$src_resp" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).lease_id||""))')"
+          SRC_DB_URL="$(printf '%s' "$src_resp" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).db_url||""))')"
+          test -n "$SRC_LEASE" && test -n "$SRC_DB_URL"
+          echo "::add-mask::$SRC_DB_URL"
+
+          DST_PASSWORD="$(openssl rand -hex 40)"
+          echo "::add-mask::$DST_PASSWORD"
+          dst_oidc="$(mint_oidc 'arbm-one-dr-neon')"
+          dst_body="$(node -e 'process.stdout.write(JSON.stringify({p_password:process.argv[1]}))' "$DST_PASSWORD")"
+          dst_resp="$(curl -fsS -X POST "$DST_API/rpc/issue_restore_lease"             -H "Authorization: Bearer $dst_oidc"             -H 'Content-Type: application/json'             -d "$dst_body")"
+          DST_ROLE="$(printf '%s' "$dst_resp" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).role||""))')"
+          DST_HOST="$(printf '%s' "$dst_resp" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).host||""))')"
+          DST_PORT="$(printf '%s' "$dst_resp" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(String(JSON.parse(s).port||5432)))')"
+          DST_DB="$(printf '%s' "$dst_resp" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).database||""))')"
+          test -n "$DST_ROLE" && test -n "$DST_HOST" && test -n "$DST_DB"
+          DST_DB_URL="postgresql://${DST_ROLE}:${DST_PASSWORD}@${DST_HOST}:${DST_PORT}/${DST_DB}?sslmode=require"
+          echo "::add-mask::$DST_DB_URL"
+
+          SCHEMAS=(
+            public
+            app_private
+            armb_backup_p0_20260704
+            armb_backup_private
+            armb_internal
+            armb_mesh_private
+            armb_sist_top3
+          )
+          DUMP_ARGS=()
+          for s in "${SCHEMAS[@]}"; do DUMP_ARGS+=(--schema="$s"); done
+
+          pg_dump "$SRC_DB_URL"             --format=custom             --no-owner             --no-privileges             "${DUMP_ARGS[@]}"             --file=arbm-one-dr.dump
+
+          pg_restore --list armb-one-dr.dump > restore.list
+          grep -vE 'auth_password_vetting_auth_user_id_fkey|commercial_bootstrap_state_v1_consumed_by_fkey|core_modulos_eventos_v1_criado_por_fkey|core_modulos_v1_atualizado_por_fkey|usuarios_auth_user_id_fkey' restore.list > restore.filtered.list
+
+          pg_restore --section=pre-data --use-list=restore.filtered.list --no-owner --no-privileges --file=pre.sql armb-one-dr.dump
+          pg_restore --section=post-data --use-list=restore.filtered.list --no-owner --no-privileges --file=post.sql armb-one-dr.dump
+
+          for f in pre.sql post.sql; do
+            perl -0pi -e 's/auth\\.uid\\(\\)/public.arbm_auth_uid()/g; s/auth\\.jwt\\(\\)/public.arbm_auth_jwt()/g; s/auth\\.role\\(\\)/public.arbm_auth_role()/g; s/auth\\.users/public.arbm_auth_users_compat/g' "$f"
+          done
+          perl -0pi -e 's/\\nCREATE SCHEMA public;\\n/\\n/g' pre.sql
+
+          psql "$DST_DB_URL" -X -v ON_ERROR_STOP=1 -f pre.sql
+          pg_restore --section=data --use-list=restore.filtered.list --no-owner --no-privileges --dbname="$DST_DB_URL" armb-one-dr.dump
+          psql "$DST_DB_URL" -X -v ON_ERROR_STOP=1 -f post.sql
+
+          src_counts="$(psql "$SRC_DB_URL" -X -At -v ON_ERROR_STOP=1 -c "select (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p'))||'|'||(select count(*) from pg_policies where schemaname='public')||'|'||(select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public')||'|'||(select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prosecdef)")"
+          dst_counts="$(psql "$DST_DB_URL" -X -At -v ON_ERROR_STOP=1 -c "select (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p'))||'|'||(select count(*) from pg_policies where schemaname='public')||'|'||(select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public')||'|'||(select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prosecdef)")"
+
+          echo "SOURCE_COUNTS=$src_counts"
+          echo "TARGET_COUNTS=$dst_counts"
+          test "$src_counts" = "$dst_counts"
+
+          sha256sum armb-one-dr.dump pre.sql post.sql > dr-restore.sha256
+          printf '%s\n'             "status=PASS"             "run_id=$GITHUB_RUN_ID"             "source_counts=$src_counts"             "target_counts=$dst_counts"             "source_lease=$SRC_LEASE"             "target_role=$DST_ROLE"             > dr-restore.env
+
+      - name: Upload DR restore proof
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: arbm-one-dr-restore-${{ github.run_id }}
+          path: |
+            dr-restore.env
+            dr-restore.sha256
+          retention-days: 30
+          if-no-files-found: warn
 
