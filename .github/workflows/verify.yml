@@ -170,11 +170,22 @@ jobs:
                 curl -sS -X POST "$SRC_API/ci-backup-db-lease-revoke"                   -H "Authorization: Bearer $tok"                   -H 'Content-Type: application/json'                   -d "$body" >/dev/null || true
               fi
             fi
+
             if [ -n "$DST_ROLE" ]; then
-              tok="$(mint_oidc "${DST_AUD:-arbm-platform-ci}" 2>/dev/null || true)"
-              if [ -n "$tok" ]; then
-                body="$(node -e 'process.stdout.write(JSON.stringify({p_role:process.argv[1]}))' "$DST_ROLE")"
-                curl -sS -X POST "$DST_API/rpc/revoke_restore_lease"                   -H "Authorization: Bearer $tok"                   -H 'Content-Type: application/json'                   -d "$body" >/dev/null || true
+              aborted="false"
+              if [ -n "$DST_DB_URL" ]; then
+                abort_json="$(psql "$DST_DB_URL" -X -At -v ON_ERROR_STOP=1 -c "select dr_control.abort_restore_lease_db()::text" 2>/dev/null || true)"
+                if [ -n "$abort_json" ]; then
+                  aborted="$(printf '%s' "$abort_json" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);process.stdout.write(String(j.ok===true&&j.aborted===true&&j.revoked===true&&j.login_disabled===true))}catch{process.stdout.write("false")}})' 2>/dev/null || true)"
+                fi
+              fi
+
+              if [ "$aborted" != "true" ]; then
+                tok="$(mint_oidc "${DST_AUD:-arbm-platform-ci}" 2>/dev/null || true)"
+                if [ -n "$tok" ]; then
+                  body="$(node -e 'process.stdout.write(JSON.stringify({p_role:process.argv[1]}))' "$DST_ROLE")"
+                  curl -sS -X POST "$DST_API/rpc/revoke_restore_lease"                     -H "Authorization: Bearer $tok"                     -H 'Content-Type: application/json'                     -d "$body" >/dev/null || true
+                fi
               fi
             fi
           }
