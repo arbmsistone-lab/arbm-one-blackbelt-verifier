@@ -227,11 +227,11 @@ jobs:
 
           pg_dump "$SRC_DB_URL"             --format=custom             --no-owner             --no-privileges             "${DUMP_ARGS[@]}"             --file=arbm-one-dr.dump
 
-          pg_restore --list armb-one-dr.dump > restore.list
+          pg_restore --list arbm-one-dr.dump > restore.list
           grep -vE 'auth_password_vetting_auth_user_id_fkey|commercial_bootstrap_state_v1_consumed_by_fkey|core_modulos_eventos_v1_criado_por_fkey|core_modulos_v1_atualizado_por_fkey|usuarios_auth_user_id_fkey' restore.list > restore.filtered.list
 
-          pg_restore --section=pre-data --use-list=restore.filtered.list --no-owner --no-privileges --file=pre.sql armb-one-dr.dump
-          pg_restore --section=post-data --use-list=restore.filtered.list --no-owner --no-privileges --file=post.sql armb-one-dr.dump
+          pg_restore --section=pre-data --use-list=restore.filtered.list --no-owner --no-privileges --file=pre.sql arbm-one-dr.dump
+          pg_restore --section=post-data --use-list=restore.filtered.list --no-owner --no-privileges --file=post.sql arbm-one-dr.dump
 
           for f in pre.sql post.sql; do
             perl -0pi -e 's/auth\\.uid\\(\\)/public.arbm_auth_uid()/g; s/auth\\.jwt\\(\\)/public.arbm_auth_jwt()/g; s/auth\\.role\\(\\)/public.arbm_auth_role()/g; s/auth\\.users/public.arbm_auth_users_compat/g' "$f"
@@ -239,7 +239,7 @@ jobs:
           perl -0pi -e 's/\\nCREATE SCHEMA public;\\n/\\n/g' pre.sql
 
           psql "$DST_DB_URL" -X -v ON_ERROR_STOP=1 -f pre.sql
-          pg_restore --section=data --use-list=restore.filtered.list --no-owner --no-privileges --dbname="$DST_DB_URL" armb-one-dr.dump
+          pg_restore --section=data --use-list=restore.filtered.list --no-owner --no-privileges --dbname="$DST_DB_URL" arbm-one-dr.dump
           psql "$DST_DB_URL" -X -v ON_ERROR_STOP=1 -f post.sql
 
           src_counts="$(psql "$SRC_DB_URL" -X -At -v ON_ERROR_STOP=1 -c "select (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p'))||'|'||(select count(*) from pg_policies where schemaname='public')||'|'||(select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public')||'|'||(select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prosecdef)")"
@@ -249,7 +249,7 @@ jobs:
           echo "TARGET_COUNTS=$dst_counts"
           test "$src_counts" = "$dst_counts"
 
-          sha256sum armb-one-dr.dump pre.sql post.sql > dr-restore.sha256
+          sha256sum arbm-one-dr.dump pre.sql post.sql > dr-restore.sha256
           printf '%s\n'             "status=PASS"             "run_id=$GITHUB_RUN_ID"             "source_counts=$src_counts"             "target_counts=$dst_counts"             "source_lease=$SRC_LEASE"             "target_role=$DST_ROLE"             > dr-restore.env
 
       - name: Upload DR restore proof
