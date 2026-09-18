@@ -275,27 +275,11 @@ jobs:
           test "$src_counts" = "$dst_counts"
 
           PROMOTED_ROLE="$DST_ROLE"
-          promote_ok="false"
-          promote_http=""
-          sleep 3
-          for attempt in $(seq 1 8); do
-            promote_oidc="$(mint_oidc "$DST_AUD")"
-            promote_body="$(node -e 'process.stdout.write(JSON.stringify({p_role:process.argv[1]}))' "$PROMOTED_ROLE")"
-            promote_http="$(curl -sS -o dst-promote-response.json -w '%{http_code}' -X POST "$DST_API/rpc/promote_restore_lease"               -H "Authorization: Bearer $promote_oidc"               -H 'Content-Type: application/json'               -d "$promote_body")"
-            echo "TARGET_PROMOTE_ATTEMPT=$attempt HTTP=$promote_http"
-            if [ "$promote_http" = "200" ]; then
-              promote_ok="$(node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync("dst-promote-response.json","utf8"));process.stdout.write(String(j.ok===true&&j.promoted===true))')"
-              if [ "$promote_ok" = "true" ]; then
-                break
-              fi
-            else
-              node -e 'const fs=require("fs");let j={};try{j=JSON.parse(fs.readFileSync("dst-promote-response.json","utf8"))}catch{};console.error("TARGET_PROMOTE_CODE="+String(j.code||"UNKNOWN").slice(0,80));console.error("TARGET_PROMOTE_ERROR="+String(j.message||j.error||j.details||"UNKNOWN").slice(0,180))' || true
-            fi
-            if [ "$attempt" -lt 8 ]; then sleep $((attempt*2)); fi
-          done
-          test "$promote_http" = "200"
+          promote_json="$(psql "$DST_DB_URL" -X -At -v ON_ERROR_STOP=1 -c "select dr_control.promote_restore_lease_db()::text")"
+          promote_ok="$(printf '%s' "$promote_json" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);process.stdout.write(String(j.ok===true&&j.promoted===true&&j.revoked===true&&j.login_disabled===true))})')"
+          echo "TARGET_PROMOTE_DB=$promote_ok"
           test "$promote_ok" = "true"
-          DST_ROLE=
+          DST_ROLE=''
 
           sha256sum arbm-one-dr.dump pre.sql post.sql > dr-restore.sha256
           printf '%s\n'             "status=PASS"             "run_id=$GITHUB_RUN_ID"             "source_counts=$src_counts"             "target_counts=$dst_counts"             "source_lease=$SRC_LEASE"             "target_role=$PROMOTED_ROLE"             > dr-restore.env
