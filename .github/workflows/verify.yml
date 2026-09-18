@@ -290,6 +290,25 @@ jobs:
           promote_ok="$(printf '%s' "$promote_json" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);process.stdout.write(String(j.ok===true&&j.promoted===true&&j.revoked===true&&j.login_disabled===true))})')"
           echo "TARGET_PROMOTE_DB=$promote_ok"
           test "$promote_ok" = "true"
+
+          finalize_ok="false"
+          finalize_http=""
+          for attempt in $(seq 1 8); do
+            finalize_oidc="$(mint_oidc 'arbm-one-dr-neon')"
+            finalize_body="$(node -e 'process.stdout.write(JSON.stringify({p_role:process.argv[1]}))' "$PROMOTED_ROLE")"
+            finalize_http="$(curl -sS -o dst-finalize-response.json -w '%{http_code}' -X POST "$DST_API/rpc/finalize_restore_role"               -H "Authorization: Bearer $finalize_oidc"               -H 'Content-Type: application/json'               -d "$finalize_body")"
+            echo "TARGET_FINALIZE_ATTEMPT=$attempt HTTP=$finalize_http"
+            if [ "$finalize_http" = "200" ]; then
+              finalize_ok="$(node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync("dst-finalize-response.json","utf8"));process.stdout.write(String(j.ok===true&&j.finalized===true&&Number(j.owned_objects)===0&&Number(j.active_sessions)===0))')"
+              if [ "$finalize_ok" = "true" ]; then
+                break
+              fi
+            fi
+            if [ "$attempt" -lt 8 ]; then sleep $((attempt*2)); fi
+          done
+          echo "TARGET_FINALIZE_DB=$finalize_ok"
+          test "$finalize_http" = "200"
+          test "$finalize_ok" = "true"
           DST_ROLE=''
 
           sha256sum arbm-one-dr.dump pre.sql post.sql > dr-restore.sha256
@@ -303,8 +322,8 @@ jobs:
           path: |
             dr-restore.env
             dr-restore.sha256
-          retention-days: 30
-          if-no-files-found: warn
+          retention-days: 90
+          if-no-files-found: error
 
 
 
