@@ -75,7 +75,7 @@ jobs:
         shell: bash
         run: |
           export ARBM_VERIFIED_SOURCE_SHA="$(node -p "require('../manifest.json').source_sha")"
-          bash scripts/run-commercial-fresh-install.sh | tee commercial-fresh-install-evidence.log
+          npm run commercial:certify | tee commercial-fresh-install-evidence.log
 
       - name: Attest GitHub public verifier with OIDC
         shell: bash
