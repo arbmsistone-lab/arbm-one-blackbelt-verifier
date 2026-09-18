@@ -201,11 +201,11 @@ jobs:
           SCHEMAS=(
             public
             app_private
-            armb_backup_p0_20260704
-            armb_backup_private
-            armb_internal
-            armb_mesh_private
-            armb_sist_top3
+            arbm_backup_p0_20260704
+            arbm_backup_private
+            arbm_internal
+            arbm_mesh_private
+            arbm_sist_top3
           )
           DUMP_ARGS=()
           for s in "${SCHEMAS[@]}"; do DUMP_ARGS+=(--schema="$s"); done
