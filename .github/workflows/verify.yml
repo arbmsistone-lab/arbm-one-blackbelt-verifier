@@ -171,7 +171,7 @@ jobs:
               fi
             fi
             if [ -n "$DST_ROLE" ]; then
-              tok="$(mint_oidc 'arbm-one-dr-neon' 2>/dev/null || true)"
+              tok="$(mint_oidc "${DST_AUD:-arbm-platform-ci}" 2>/dev/null || true)"
               if [ -n "$tok" ]; then
                 body="$(node -e 'process.stdout.write(JSON.stringify({p_role:process.argv[1]}))' "$DST_ROLE")"
                 curl -sS -X POST "$DST_API/rpc/revoke_restore_lease"                   -H "Authorization: Bearer $tok"                   -H 'Content-Type: application/json'                   -d "$body" >/dev/null || true
@@ -279,7 +279,7 @@ jobs:
           promote_http=""
           sleep 3
           for attempt in $(seq 1 8); do
-            promote_oidc="$(mint_oidc 'arbm-one-dr-neon')"
+            promote_oidc="$(mint_oidc "$DST_AUD")"
             promote_body="$(node -e 'process.stdout.write(JSON.stringify({p_role:process.argv[1]}))' "$PROMOTED_ROLE")"
             promote_http="$(curl -sS -o dst-promote-response.json -w '%{http_code}' -X POST "$DST_API/rpc/promote_restore_lease"               -H "Authorization: Bearer $promote_oidc"               -H 'Content-Type: application/json'               -d "$promote_body")"
             echo "TARGET_PROMOTE_ATTEMPT=$attempt HTTP=$promote_http"
