@@ -11,6 +11,7 @@ on:
         options:
           - verify
           - dr-restore
+          - dr-audience-probe
   push:
     branches: [main]
     paths:
@@ -263,3 +264,48 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
 
+
+
+  dr-audience-probe:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'dr-audience-probe' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Discover current Neon audience
+        shell: bash
+        run: |
+          set -euo pipefail
+          api='https://ep-twilight-resonance-acg7v2h2.apirest.sa-east-1.aws.neon.tech/arbm_one_dr/rest/v1/rpc/verifier_probe'
+          candidates=(
+            'github-verifier-dr'
+            'arbm-platform-ci'
+            'arbm-one-dr-neon'
+            'arbm_one_dr'
+            'round-night-66000259'
+            'https://github.com/arbmsistone-lab/arbm-one-blackbelt-verifier'
+            'https://ep-twilight-resonance-acg7v2h2.apirest.sa-east-1.aws.neon.tech/arbm_one_dr/rest/v1'
+          )
+          : > audience-results.txt
+          success=''
+          for aud in "${candidates[@]}"; do
+            enc="$(node -p "encodeURIComponent(process.argv[1])" "$aud")"
+            oidc_json="$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=$enc")"
+            oidc="$(printf '%s' "$oidc_json" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).value||""))')"
+            code="$(curl -sS -o body.json -w '%{http_code}' -X POST "$api" -H "Authorization: Bearer $oidc" -H 'Content-Type: application/json' -d '{}')"
+            msg="$(node -e 'const fs=require("fs");let j={};try{j=JSON.parse(fs.readFileSync("body.json","utf8"))}catch{};process.stdout.write(String(j.message||j.error||j.code||j.ok||"").slice(0,160))')"
+            printf '%s\t%s\t%s\n' "$code" "$aud" "$msg" >> audience-results.txt
+            if [ "$code" = "200" ]; then success="$aud"; break; fi
+          done
+          cat audience-results.txt
+          test -n "$success"
+          printf '%s' "$success" > audience-success.txt
+      - name: Upload audience proof
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: neon-audience-proof-${{ github.run_id }}
+          path: |
+            audience-results.txt
+            audience-success.txt
+          retention-days: 7
+          if-no-files-found: warn
