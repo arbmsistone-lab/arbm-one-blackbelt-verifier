@@ -301,6 +301,7 @@ jobs:
             enc="$(node -p "encodeURIComponent(process.argv[1])" "$aud")"
             oidc_json="$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=$enc")"
             oidc="$(printf '%s' "$oidc_json" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).value||""))')"
+            node -e 'const j=JSON.parse(Buffer.from(process.argv[1].split(".")[1],"base64url")); console.log("OIDC_CLAIMS="+JSON.stringify({aud:j.aud,repository:j.repository,repository_id:j.repository_id,ref:j.ref,runner_environment:j.runner_environment,workflow_ref:j.workflow_ref,run_id:j.run_id,sub:j.sub}))' "$oidc"
             code="$(curl -sS -o body.json -w '%{http_code}' -X POST "$api" -H "Authorization: Bearer $oidc" -H 'Content-Type: application/json' -d '{}')"
             msg="$(node -e 'const fs=require("fs");let j={};try{j=JSON.parse(fs.readFileSync("body.json","utf8"))}catch{};process.stdout.write(String(j.message||j.error||j.code||j.ok||"").slice(0,160))')"
             printf '%s\t%s\t%s\n' "$code" "$aud" "$msg" >> audience-results.txt
