@@ -70,6 +70,26 @@ jobs:
           ARBM_CI_SCOPE: provider
         run: npm run ci:portable:core
 
+      - name: Attest GitHub public verifier with OIDC before Cloudflare build
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_sha="$(node -p "require('./manifest.json').source_sha")"
+          contract="$(node -p "require('./manifest.json').gate_contract_version")"
+          oidc_json="$(curl --fail-with-body --silent --show-error -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=arbm-platform-ci")"
+          oidc="$(printf '%s' "$oidc_json" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);if(!j.value)process.exit(1);process.stdout.write(j.value)})')"
+          body="$(node -e 'const m=require("./manifest.json"); process.stdout.write(JSON.stringify({provider:"github",sha:m.source_sha,status:"success",gate_contract_version:m.gate_contract_version,build_ref:process.env.GITHUB_RUN_ID}))')"
+          http="$(curl --silent --show-error -o attest-early-response.json -w '%{http_code}' -X POST 'https://pvkpkqwdnnpkgvllwqbc.supabase.co/functions/v1/arbm-platform-api-v1/v1/ci-attest' -H "Authorization: Bearer $oidc" -H 'Content-Type: application/json' -d "$body")"
+          if [ "$http" = "200" ]; then
+            echo "GITHUB_PUBLIC_EARLY_ATTEST=PASS source_sha=$source_sha contract=$contract"
+          elif [ "$http" = "409" ] && grep -q 'DUPLICATE_EVIDENCE_REJECTED' attest-early-response.json; then
+            echo "GITHUB_PUBLIC_EARLY_ATTEST=PASS duplicate"
+          else
+            echo "GITHUB_PUBLIC_EARLY_ATTEST=FAIL http=$http" >&2
+            cat attest-early-response.json >&2 || true
+            exit 1
+          fi
+
       - name: Prepare ephemeral Git metadata for packaging
         working-directory: source
         shell: bash
