@@ -132,7 +132,7 @@ jobs:
           reset_ok="false"
           reset_http=""
           for attempt in $(seq 1 8); do
-            reset_oidc="$(mint_oidc 'arbm-one-dr-neon')"
+            reset_oidc="$(mint_oidc 'arbm-platform-ci')"
             reset_http="$(curl -sS -o dst-reset-response.json -w '%{http_code}' -X POST "$DST_API/rpc/reset_restore_target"             -H "Authorization: Bearer $reset_oidc"             -H 'Content-Type: application/json'             -d '{}')"
             echo "TARGET_RESET_ATTEMPT=$attempt HTTP=$reset_http"
             if [ "$reset_http" != "200" ]; then
@@ -243,7 +243,7 @@ jobs:
           finalize_ok="false"
           finalize_http=""
           for attempt in $(seq 1 8); do
-            finalize_oidc="$(mint_oidc 'arbm-one-dr-neon')"
+            finalize_oidc="$(mint_oidc 'arbm-platform-ci')"
             finalize_body="$(node -e 'process.stdout.write(JSON.stringify({p_role:process.argv[1]}))' "$PROMOTED_ROLE")"
             finalize_http="$(curl -sS -o dst-finalize-response.json -w '%{http_code}' -X POST "$DST_API/rpc/finalize_restore_role"               -H "Authorization: Bearer $finalize_oidc"               -H 'Content-Type: application/json'               -d "$finalize_body")"
             echo "TARGET_FINALIZE_ATTEMPT=$attempt HTTP=$finalize_http"
