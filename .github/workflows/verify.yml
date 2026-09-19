@@ -256,9 +256,7 @@ jobs:
 
           reset_oidc="$(mint_oidc 'arbm-one-dr-neon')"
           reset_http="$(curl -sS -o dst-reset-response.json -w '%{http_code}' -X POST "$DST_API/rpc/reset_restore_target"             -H "Authorization: Bearer $reset_oidc"             -H 'Content-Type: application/json'             -d '{}')"
-          echo "TARGET_RESET_HTTP=$reset_http"
-          test "$reset_http" = "200"
-          reset_ok="$(node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync("dst-reset-response.json","utf8"));process.stdout.write(String(j.ok===true&&j.reset===true&&Number(j.active_leases)===0))')"
+          echo "TARGET_RESET_HTTP=$reset_http"`n          if [ "$reset_http" != "200" ]; then`n            node -e 'const fs=require("fs");let j={};try{j=JSON.parse(fs.readFileSync("dst-reset-response.json","utf8"))}catch{};console.error("TARGET_RESET_ERROR="+String(j.message||j.error||j.code||"UNKNOWN").slice(0,200));console.error("TARGET_RESET_DETAILS="+String(j.details||j.hint||"").slice(0,200))'`n            exit 1`n          fi`n          reset_ok="$(node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync("dst-reset-response.json","utf8"));process.stdout.write(String(j.ok===true&&j.reset===true&&Number(j.active_leases)===0))')"
           echo "TARGET_RESET_DB=$reset_ok"
           test "$reset_ok" = "true"
 
