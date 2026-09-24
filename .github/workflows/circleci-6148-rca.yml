@@ -16,7 +16,7 @@ jobs:
           test -n "$CIRCLECI_TOKEN"
           curl -fsS -H "Circle-Token: $CIRCLECI_TOKEN"             "https://circleci.com/api/v1.1/project/github/arbmsistone-lab/ARBM-one/6148"             -o build.json
           python3 - <<'PY'
-          import json
+          import json,re,urllib.request
           b=json.load(open("build.json",encoding="utf-8"))
           print("CIRCLECI_BUILD_NUM="+str(b.get("build_num")))
           print("CIRCLECI_STATUS="+str(b.get("status")))
@@ -31,7 +31,23 @@ jobs:
                       print("FIRST_FAILING_ACTION="+str(a.get("name")))
                       print("FIRST_FAILING_STATUS="+str(a.get("status")))
                       print("FIRST_FAILING_EXIT_CODE="+str(a.get("exit_code")))
-                      print("OUTPUT_URL="+str(a.get("output_url") or ""))
+                      url=a.get("output_url")
+                      if url:
+                          try:
+                              raw=urllib.request.urlopen(url,timeout=20).read().decode("utf-8","replace")
+                              try:
+                                  p=json.loads(raw)
+                                  if isinstance(p,list):
+                                      raw="\n".join(str(x.get("message","")) if isinstance(x,dict) else str(x) for x in p)
+                              except Exception:
+                                  pass
+                              raw=re.sub(r'(?i)(token|authorization|secret|password)(\s*[:=]\s*)\S+',r'\1\2[REDACTED]',raw)
+                              print("OUTPUT_TAIL_BEGIN")
+                              for ln in [x for x in raw.splitlines() if x.strip()][-160:]:
+                                  print(ln[:2000])
+                              print("OUTPUT_TAIL_END")
+                          except Exception as e:
+                              print("OUTPUT_FETCH_ERROR="+type(e).__name__+":"+str(e)[:200])
                       raise SystemExit
           print("FIRST_FAILING_STEP=NONE_FOUND")
           PY
