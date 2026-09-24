@@ -1,46 +1,37 @@
-name: CircleCI Rerun Watch
+name: CircleCI Infra RCA
 on:
   push:
     branches: [chore/circleci-6148-rca]
 permissions:
   contents: read
 jobs:
-  watch:
+  inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Watch CircleCI rerun
+      - name: Inspect CircleCI pipeline errors
         env:
           CIRCLECI_TOKEN: ${{ secrets.CIRCLECI_API_TOKEN }}
         run: |
           set -euo pipefail
-          test -n "$CIRCLECI_TOKEN"
           H="Circle-Token: $CIRCLECI_TOKEN"
-          wid="20a1d6c4-102b-41cd-982d-1d90b076af60"
-          for i in $(seq 1 40); do
-            curl -fsS -H "$H" "https://circleci.com/api/v2/workflow/$wid" -o workflow.json
-            status="$(python3 -c 'import json; print(json.load(open("workflow.json")).get("status"))')"
-            echo "POLL_$i=$status"
-            case "$status" in
-              success|failed|error|canceled|unauthorized) break ;;
-            esac
-            sleep 15
-          done
-          curl -fsS -H "$H" "https://circleci.com/api/v2/workflow/$wid/job" -o jobs.json
+          pid="c1452464-aaea-4bbf-8008-404beaeca9a2"
+          curl -fsS -H "$H" "https://circleci.com/api/v2/pipeline/$pid" -o pipeline.json
+          curl -fsS -H "$H" "https://circleci.com/api/v1.1/project/github/arbmsistone-lab/ARBM-one/6151" -o build.json
           python3 - <<'PY'
           import json
-          w=json.load(open("workflow.json"))
-          j=json.load(open("jobs.json"))
-          print("RERUN_STATUS="+str(w.get("status")))
-          print("RERUN_PIPELINE_ID="+str(w.get("pipeline_id")))
-          print("RERUN_PIPELINE_NUMBER="+str(w.get("pipeline_number")))
-          print("RERUN_CREATED_AT="+str(w.get("created_at")))
-          print("RERUN_STOPPED_AT="+str(w.get("stopped_at")))
-          for x in j.get("items") or []:
-              print("JOB_ID="+str(x.get("id")))
-              print("JOB_NAME="+str(x.get("name")))
-              print("JOB_NUMBER="+str(x.get("job_number")))
-              print("JOB_STATUS="+str(x.get("status")))
-              print("JOB_STARTED_AT="+str(x.get("started_at")))
-              print("JOB_STOPPED_AT="+str(x.get("stopped_at")))
-              print("JOB_RESOURCE_CLASS="+str(x.get("resource_class")))
+          p=json.load(open("pipeline.json"))
+          b=json.load(open("build.json"))
+          print("PIPELINE_STATE="+str(p.get("state")))
+          print("PIPELINE_NUMBER="+str(p.get("number")))
+          print("PIPELINE_VCS_REVISION="+str((p.get("vcs") or {}).get("revision")))
+          print("PIPELINE_ERRORS="+str(p.get("errors")))
+          for k in ("status","outcome","failed","infrastructure_fail","why","fail_reason","queued_at","start_time","stop_time","usage_queued_at","build_time_millis","lifecycle"):
+              print("BUILD_"+k.upper()+"="+str(b.get(k)))
+          msgs=b.get("messages") or []
+          for i,m in enumerate(msgs[:20],1):
+              if isinstance(m,dict):
+                  print("MESSAGE_%d_TYPE=%s"%(i,str(m.get("type"))))
+                  print("MESSAGE_%d_MESSAGE=%s"%(i,str(m.get("message"))[:2000]))
+              else:
+                  print("MESSAGE_%d=%s"%(i,str(m)[:2000]))
           PY
