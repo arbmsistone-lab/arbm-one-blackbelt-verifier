@@ -1,0 +1,44 @@
+name: CircleCI 6148 RCA
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rca:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect CircleCI build 6148
+        env:
+          CIRCLECI_TOKEN: ${{ secrets.CIRCLECI_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CIRCLECI_TOKEN"
+          api="https://circleci.com/api/v1.1/project/github/arbmsistone-lab/ARBM-one/6148"
+          code="$(curl --silent --show-error -o build.json -w '%{http_code}' -H "Circle-Token: $CIRCLECI_TOKEN" "$api")"
+          test "$code" = "200"
+          python3 - <<'PY'
+          import json
+          b=json.load(open("build.json",encoding="utf-8"))
+          print("CIRCLECI_BUILD_NUM="+str(b.get("build_num")))
+          print("CIRCLECI_STATUS="+str(b.get("status")))
+          print("CIRCLECI_BRANCH="+str(b.get("branch")))
+          print("CIRCLECI_SHA="+str(b.get("vcs_revision")))
+          wf=b.get("workflows") or {}
+          print("CIRCLECI_WORKFLOW_ID="+str(wf.get("workflow_id")))
+          print("CIRCLECI_JOB_NAME="+str(wf.get("job_name")))
+          failed=[]
+          for step in b.get("steps") or []:
+              for a in step.get("actions") or []:
+                  if a.get("failed") or a.get("status") in ("failed","timedout","canceled","not_run"):
+                      failed.append((step.get("name"),a))
+          if failed:
+              step,a=failed[0]
+              print("FIRST_FAILING_STEP="+str(step))
+              print("FIRST_FAILING_ACTION="+str(a.get("name")))
+              print("FIRST_FAILING_STATUS="+str(a.get("status")))
+              print("FIRST_FAILING_EXIT_CODE="+str(a.get("exit_code")))
+              print("FIRST_FAILING_OUTPUT_URL_PRESENT="+str(bool(a.get("output_url"))).lower())
+          else:
+              print("FIRST_FAILING_STEP=NONE_FOUND")
+          PY
