@@ -1,4 +1,4 @@
-name: CircleCI 6148 RCA
+name: CircleCI 6148 RCA V2
 on:
   push:
     branches: [chore/circleci-6148-rca]
@@ -8,46 +8,35 @@ jobs:
   rca:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect CircleCI build 6148
+      - name: Inspect CircleCI workflow and job
         env:
           CIRCLECI_TOKEN: ${{ secrets.CIRCLECI_API_TOKEN }}
         run: |
           set -euo pipefail
           test -n "$CIRCLECI_TOKEN"
-          curl -fsS -H "Circle-Token: $CIRCLECI_TOKEN"             "https://circleci.com/api/v1.1/project/github/arbmsistone-lab/ARBM-one/6148"             -o build.json
+          H="Circle-Token: $CIRCLECI_TOKEN"
+          wid="4a48bb64-4642-4bdc-a940-1989b1549598"
+          curl -fsS -H "$H" "https://circleci.com/api/v2/workflow/$wid" -o workflow.json
+          curl -fsS -H "$H" "https://circleci.com/api/v2/workflow/$wid/job" -o jobs.json
+          curl -fsS -H "$H" "https://circleci.com/api/v2/project/gh/arbmsistone-lab/ARBM-one/job/6148" -o job.json || true
           python3 - <<'PY'
-          import json,re,urllib.request
-          b=json.load(open("build.json",encoding="utf-8"))
-          print("CIRCLECI_BUILD_NUM="+str(b.get("build_num")))
-          print("CIRCLECI_STATUS="+str(b.get("status")))
-          print("CIRCLECI_SHA="+str(b.get("vcs_revision")))
-          w=b.get("workflows") or {}
-          print("CIRCLECI_WORKFLOW_ID="+str(w.get("workflow_id")))
-          print("CIRCLECI_JOB_NAME="+str(w.get("job_name")))
-          for s in b.get("steps") or []:
-              for a in s.get("actions") or []:
-                  if a.get("failed") or a.get("status") in ("failed","timedout","canceled","not_run"):
-                      print("FIRST_FAILING_STEP="+str(s.get("name")))
-                      print("FIRST_FAILING_ACTION="+str(a.get("name")))
-                      print("FIRST_FAILING_STATUS="+str(a.get("status")))
-                      print("FIRST_FAILING_EXIT_CODE="+str(a.get("exit_code")))
-                      url=a.get("output_url")
-                      if url:
-                          try:
-                              raw=urllib.request.urlopen(url,timeout=20).read().decode("utf-8","replace")
-                              try:
-                                  p=json.loads(raw)
-                                  if isinstance(p,list):
-                                      raw="\n".join(str(x.get("message","")) if isinstance(x,dict) else str(x) for x in p)
-                              except Exception:
-                                  pass
-                              raw=re.sub(r'(?i)(token|authorization|secret|password)(\s*[:=]\s*)\S+',r'\1\2[REDACTED]',raw)
-                              print("OUTPUT_TAIL_BEGIN")
-                              for ln in [x for x in raw.splitlines() if x.strip()][-160:]:
-                                  print(ln[:2000])
-                              print("OUTPUT_TAIL_END")
-                          except Exception as e:
-                              print("OUTPUT_FETCH_ERROR="+type(e).__name__+":"+str(e)[:200])
-                      raise SystemExit
-          print("FIRST_FAILING_STEP=NONE_FOUND")
+          import json
+          w=json.load(open("workflow.json"))
+          j=json.load(open("jobs.json"))
+          print("WORKFLOW_STATUS="+str(w.get("status")))
+          print("WORKFLOW_CREATED_AT="+str(w.get("created_at")))
+          print("WORKFLOW_STOPPED_AT="+str(w.get("stopped_at")))
+          print("WORKFLOW_PIPELINE_ID="+str(w.get("pipeline_id")))
+          print("WORKFLOW_PIPELINE_NUMBER="+str(w.get("pipeline_number")))
+          items=j.get("items") or []
+          for x in items:
+              if x.get("job_number")==6148 or x.get("name")=="portable_core":
+                  for k in ("id","name","job_number","status","type","started_at","stopped_at","resource_class"):
+                      print("JOB_"+k.upper()+"="+str(x.get(k)))
+          try:
+              d=json.load(open("job.json"))
+              for k in ("number","name","status","started_at","stopped_at","executor","parallelism"):
+                  print("DETAIL_"+k.upper()+"="+str(d.get(k)))
+          except Exception:
+              print("JOB_DETAIL_UNAVAILABLE=true")
           PY
