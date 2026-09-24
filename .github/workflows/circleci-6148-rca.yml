@@ -1,42 +1,26 @@
-name: CircleCI 6148 RCA V2
+name: CircleCI 6148 Rerun
 on:
   push:
     branches: [chore/circleci-6148-rca]
 permissions:
   contents: read
 jobs:
-  rca:
+  rerun:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect CircleCI workflow and job
+      - name: Rerun failed CircleCI workflow
         env:
           CIRCLECI_TOKEN: ${{ secrets.CIRCLECI_API_TOKEN }}
         run: |
           set -euo pipefail
           test -n "$CIRCLECI_TOKEN"
-          H="Circle-Token: $CIRCLECI_TOKEN"
           wid="4a48bb64-4642-4bdc-a940-1989b1549598"
-          curl -fsS -H "$H" "https://circleci.com/api/v2/workflow/$wid" -o workflow.json
-          curl -fsS -H "$H" "https://circleci.com/api/v2/workflow/$wid/job" -o jobs.json
-          curl -fsS -H "$H" "https://circleci.com/api/v2/project/gh/arbmsistone-lab/ARBM-one/job/6148" -o job.json || true
+          code="$(curl -sS -o rerun.json -w '%{http_code}'             -X POST             -H "Circle-Token: $CIRCLECI_TOKEN"             -H "Content-Type: application/json"             -d '{"from_failed":true}'             "https://circleci.com/api/v2/workflow/$wid/rerun")"
+          echo "RERUN_HTTP=$code"
+          test "$code" = "202"
           python3 - <<'PY'
           import json
-          w=json.load(open("workflow.json"))
-          j=json.load(open("jobs.json"))
-          print("WORKFLOW_STATUS="+str(w.get("status")))
-          print("WORKFLOW_CREATED_AT="+str(w.get("created_at")))
-          print("WORKFLOW_STOPPED_AT="+str(w.get("stopped_at")))
-          print("WORKFLOW_PIPELINE_ID="+str(w.get("pipeline_id")))
-          print("WORKFLOW_PIPELINE_NUMBER="+str(w.get("pipeline_number")))
-          items=j.get("items") or []
-          for x in items:
-              if x.get("job_number")==6148 or x.get("name")=="portable_core":
-                  for k in ("id","name","job_number","status","type","started_at","stopped_at","resource_class"):
-                      print("JOB_"+k.upper()+"="+str(x.get(k)))
-          try:
-              d=json.load(open("job.json"))
-              for k in ("number","name","status","started_at","stopped_at","executor","parallelism"):
-                  print("DETAIL_"+k.upper()+"="+str(d.get(k)))
-          except Exception:
-              print("JOB_DETAIL_UNAVAILABLE=true")
+          j=json.load(open("rerun.json"))
+          print("RERUN_WORKFLOW_ID="+str(j.get("workflow_id")))
+          print("RERUN_MESSAGE="+str(j.get("message")))
           PY
