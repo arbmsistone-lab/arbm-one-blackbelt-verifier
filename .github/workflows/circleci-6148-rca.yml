@@ -1,26 +1,46 @@
-name: CircleCI 6148 Rerun
+name: CircleCI Rerun Watch
 on:
   push:
     branches: [chore/circleci-6148-rca]
 permissions:
   contents: read
 jobs:
-  rerun:
+  watch:
     runs-on: ubuntu-latest
     steps:
-      - name: Rerun failed CircleCI workflow
+      - name: Watch CircleCI rerun
         env:
           CIRCLECI_TOKEN: ${{ secrets.CIRCLECI_API_TOKEN }}
         run: |
           set -euo pipefail
           test -n "$CIRCLECI_TOKEN"
-          wid="4a48bb64-4642-4bdc-a940-1989b1549598"
-          code="$(curl -sS -o rerun.json -w '%{http_code}'             -X POST             -H "Circle-Token: $CIRCLECI_TOKEN"             -H "Content-Type: application/json"             -d '{"from_failed":true}'             "https://circleci.com/api/v2/workflow/$wid/rerun")"
-          echo "RERUN_HTTP=$code"
-          test "$code" = "202"
+          H="Circle-Token: $CIRCLECI_TOKEN"
+          wid="20a1d6c4-102b-41cd-982d-1d90b076af60"
+          for i in $(seq 1 40); do
+            curl -fsS -H "$H" "https://circleci.com/api/v2/workflow/$wid" -o workflow.json
+            status="$(python3 -c 'import json; print(json.load(open("workflow.json")).get("status"))')"
+            echo "POLL_$i=$status"
+            case "$status" in
+              success|failed|error|canceled|unauthorized) break ;;
+            esac
+            sleep 15
+          done
+          curl -fsS -H "$H" "https://circleci.com/api/v2/workflow/$wid/job" -o jobs.json
           python3 - <<'PY'
           import json
-          j=json.load(open("rerun.json"))
-          print("RERUN_WORKFLOW_ID="+str(j.get("workflow_id")))
-          print("RERUN_MESSAGE="+str(j.get("message")))
+          w=json.load(open("workflow.json"))
+          j=json.load(open("jobs.json"))
+          print("RERUN_STATUS="+str(w.get("status")))
+          print("RERUN_PIPELINE_ID="+str(w.get("pipeline_id")))
+          print("RERUN_PIPELINE_NUMBER="+str(w.get("pipeline_number")))
+          print("RERUN_CREATED_AT="+str(w.get("created_at")))
+          print("RERUN_STOPPED_AT="+str(w.get("stopped_at")))
+          for x in j.get("items") or []:
+              print("JOB_ID="+str(x.get("id")))
+              print("JOB_NAME="+str(x.get("name")))
+              print("JOB_NUMBER="+str(x.get("job_number")))
+              print("JOB_STATUS="+str(x.get("status")))
+              print("JOB_STARTED_AT="+str(x.get("started_at")))
+              print("JOB_STOPPED_AT="+str(x.get("stopped_at")))
+              print("JOB_RESOURCE_CLASS="+str(x.get("resource_class")))
           PY
