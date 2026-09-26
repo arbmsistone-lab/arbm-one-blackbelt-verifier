@@ -2,7 +2,7 @@
   "source_repo": "arbmsistone-lab/ARBM-one",
   "source_sha": "b4dfd9c702e54536c49cdfbd57bb65b205de8a53",
   "archive_sha256": "651cfc0b058882dea6150469d641270cd5a7625748f174d7d4773e9153646648",
-  "ciphertext_sha256": "3a04ba07170a3d734dc0dacd9fe27348710a39a536a0401a0253821bbd8c5c7d",
+  "ciphertext_sha256": "3bb89287e8a2ea278e3c0a6de07229023b7e795ce2beaeec5642cabb1ddeed66",
   "snapshot_url": "https://pvkpkqwdnnpkgvllwqbc.supabase.co/storage/v1/object/public/arbm-one-blackbelt-snapshots/b4dfd9c702e54536c49cdfbd57bb65b205de8a53/snapshot.enc",
   "gate_contract_version": "ARBM_ONE_CLOUD_CRITICAL_V1",
   "ci_scope": "provider",
