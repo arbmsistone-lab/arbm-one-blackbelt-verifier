@@ -13,7 +13,7 @@ on:
           - dr-restore
           - dr-audience-probe
   push:
-    branches: [main]
+    branches: [main, proof/b4dfd9c-storage-20260926]
     paths:
       - snapshot.enc
       - manifest.json
@@ -41,6 +41,17 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
+
+      - name: Fetch encrypted exact-SHA snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(node -p "require('./manifest.json').snapshot_url")"
+          expected="$(node -p "require('./manifest.json').ciphertext_sha256")"
+          curl --fail-with-body --location --silent --show-error "$url" -o snapshot.enc
+          actual="$(sha256sum snapshot.enc | awk '{print $1}')"
+          test "$actual" = "$expected"
+          echo "CIPHERTEXT_SHA256=$actual"
 
       - name: Decrypt exact-SHA snapshot
         env:
