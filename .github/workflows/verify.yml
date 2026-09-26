@@ -118,7 +118,7 @@ jobs:
         run: |
           set -euo pipefail
           export WORKERS_CI_COMMIT_SHA="$(node -p "require('../manifest.json').source_sha")"
-          export WORKERS_CI_BRANCH="main"
+          export WORKERS_CI_BRANCH="verifier-build"
           npm run check:cloudflare | tee cloudflare-check.log
           entry="$(find cf-release-bundle -maxdepth 1 -type f -name '*.js' -print -quit)"
           test -n "$entry"
