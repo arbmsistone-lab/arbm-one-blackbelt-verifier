@@ -13,7 +13,7 @@ on:
           - dr-restore
           - dr-audience-probe
   push:
-    branches: [main, proof/b4dfd9c-storage-20260926]
+    branches: [main]
     paths:
       - snapshot.enc
       - manifest.json
@@ -42,21 +42,6 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Derive snapshot recipient public key
-        env:
-          SNAPSHOT_KEY: ${{ secrets.SNAPSHOT_KEY }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          node - <<'NODE'
-          const crypto = require('crypto');
-          const key = Buffer.from(process.env.SNAPSHOT_KEY || '', 'base64');
-          if (key.length !== 32) throw new Error('SNAPSHOT_KEY_INVALID');
-          const prefix = Buffer.from('302e020100300506032b656e04220420', 'hex');
-          const priv = crypto.createPrivateKey({key:Buffer.concat([prefix,key]),format:'der',type:'pkcs8'});
-          const pub = crypto.createPublicKey(priv).export({format:'der',type:'spki'});
-          console.log('SNAPSHOT_RECIPIENT_PUBLIC_KEY='+pub.toString('base64'));
-          NODE
 
       - name: Fetch encrypted exact-SHA snapshot
         shell: bash
