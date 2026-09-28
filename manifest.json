@@ -6,5 +6,7 @@
   "snapshot_url": "https://pvkpkqwdnnpkgvllwqbc.supabase.co/storage/v1/object/public/arbm-one-blackbelt-snapshots/b4dfd9c702e54536c49cdfbd57bb65b205de8a53/snapshot.enc",
   "gate_contract_version": "ARBM_ONE_CLOUD_CRITICAL_V1",
   "ci_scope": "provider",
-  "created_for": "same-sha-public-verifier-recovery"
+  "created_for": "same-sha-public-verifier-recovery",
+  "refresh_reason": "renew exact-b4df independent attestation for final production closure",
+  "refresh_date": "2026-09-28"
 }
