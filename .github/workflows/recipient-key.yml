@@ -2,6 +2,10 @@ name: Blackbelt Recipient Public Key
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/recipient-key.yml
 
 permissions:
   contents: read
